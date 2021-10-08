@@ -1,0 +1,2 @@
+C:\Users\kim\Desktop\Server\Server\Lib\Debug\ServerCore.pdb
+C:\Users\kim\Desktop\Server\Server\ServerCore\x64\Debug\ServerCore.pdb
