@@ -8,7 +8,7 @@ class LockStack
 public:
 	LockStack() {}
 
-	LockStack(const LockStack&) = delete;
+	LockStack(const LockStack&) = delete; // 복사 방지
 	LockStack& operator=(const LockStack&) = delete;
 
 	void Push(T _Value)
@@ -18,20 +18,29 @@ public:
 		_condVar.notify_one();
 	}
 
-	bool TryPop(T& _Value)
+	bool TryPop(T& value)
 	{
 		lock_guard<mutex> lock(_mutex);
-
 		if (_stack.empty())
 			return false;
-		
+
 		// empty -> top -> pop
-		Value - stack
-		_condVar.notify_one();
+		value = std::move(_stack.top());
+		_stack.pop();
+		return true;
 	}
+
+	void WaitPop(T& value)
+	{
+		unique_lock<mutex> lock(_mutex);
+		_condVar.wait(lock, [this] { return _stack.empty() == false; });
+		value = std::move(_stack.top());
+		_stack.pop();
+	}
+
 private:
 
-	stack<T> stack;
+	stack<T> _stack;
 	mutex _mutex;
 	condition_variable _condVar;
 	
