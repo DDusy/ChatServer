@@ -36,7 +36,7 @@ int main()
 	SOCKET clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);  //IPv4
 	if (clientSocket == INVALID_SOCKET)	// 소켓 처리 실패시
 	{
-		int32 errCode = ::WSAGetLastError();	// 에러코드 반환
+		int32 errCode = ::WSAGetLastError();	// 에러코드 반환 
 		cout << "Socket ErrorCode : " << errCode << endl;
 		return 0;
 	}
