@@ -30,6 +30,7 @@ int main()
 	if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		return 0;
 
+
 	/*소켓을 만드는데 바로 이 함수를 사용합니다.
 	소켓 역시 파일로 다루어지기 때문에 반환값은 파일디스크립터입니다.
 	만약 소켓을 여는데 실패했다면 - 1을 리턴합니다.*/
@@ -40,6 +41,16 @@ int main()
 		cout << "Socket ErrorCode : " << errCode << endl;
 		return 0;
 	}
+
+	u_long on = 1;
+	if (::ioctlsocket(listenSocket, FIONBIO, &on) == INVALID_SOCKET)
+	{
+		int32 errCode = ::WSAGetLastError();
+		cout << "Socket ErrorCode : " << errCode << endl;
+		return 0;
+	}
+		
+
 
 	// 나의 주소
 	SOCKADDR_IN serverAddr; // IPv4
