@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>D:\ChatServer\Server\DummyClient\Bin\DummyClient.exe</FullPath>
+      <FullPath>D:\ChatServer\Server\Bin\DummyClient.exe</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

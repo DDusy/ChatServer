@@ -41,73 +41,78 @@ int main()
 		return 0;
 	}
 
+	u_long on = 1;
+	if (::ioctlsocket(clientSocket, FIONBIO, &on) == INVALID_SOCKET)
+		return 0;
+
 	// 연결할 목적지는? IP주소 + Port
 	SOCKADDR_IN serverAddr; // IPv4
 	::memset(&serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
-	::inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); // dns를 이용해 서버 찾기
+	::inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); 
 	serverAddr.sin_port = ::htons(7777);  
-	// host to network short -> endian issue 존재
-	// Little-Endian vs Big-Endian
-	// ex) 0x12345678 4바이트 정수
-	// low [0x78][0x56][0x34][0x12] high < little 인텔은 little 
-	// low [0x12][0x34][0x56][0x78] high < big
 
-	/*
-	connect 원격 호스트(원격 컴퓨터)와 연결하는 함수입니다. 
-	연결된 정보는 remote_host에 저장됩니다.
-	성공시 0, 오류시 -1을 반환합니다.
-	*/
-	//				소켓			,	소켓 어드레스		  , 주소사이즈
-	if (::connect(clientSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+
+	while (true)
 	{
-		int32 errCode = ::WSAGetLastError();
-		cout << "Connect ErrorCode : " << errCode << endl;
-		return 0;
-	}
+		if (::connect(clientSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+		{
+			int32 errCode = ::WSAGetLastError();
 
+
+			if (errCode == WSAEWOULDBLOCK)
+				continue;
+
+			if (errCode == WSAEISCONN)
+				break;
+
+			break;;
+		}
+
+	}
+	
 	cout << "Connected To Server!" << endl;
 
 	while (true)
 	{
 		// TODO
-		char sendBuffer[100] = "Hello World!";
+		char sendBuffer[100] = "non blocking Test!";
 
-		for (int32 i = 0; i < 10; i++)
-		{
-			//클라이언트는 send 서버에선 receive
-			//buffer를 소켓 파일 디스크립터인 소켓으로 전송합니다.
-			//보낸 바이트수를 반환하며 실패시 - 1을 반환합니다.
 			int32 resultCode = ::send(clientSocket, sendBuffer, sizeof(sendBuffer), 0);
+
 			if (resultCode == SOCKET_ERROR)
 			{
+
 				int32 errCode = ::WSAGetLastError();
+			
+				if (errCode == WSAEWOULDBLOCK)
+					continue;
+
 				cout << "Send ErrorCode : " << errCode << endl;
-				return 0;
+				break;
 			}
-		}
+		
+		char recvBuffer[1000]=" ";
 
-
-		cout << "Send Data! Len = " << sizeof(sendBuffer) << endl;
-		/*
-		* 소켓 입출력 버퍼
-		* 클라 - 서버 (버퍼를 통해 통신)
-		* 커널 레벨에서 소켓과 관련한 버퍼 생성
-		* 
-		*/
-		char recvBuffer[1000];
-
-		int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-		if (recvLen <= 0)
+		while (true)
 		{
-			int32 errCode = ::WSAGetLastError();
-			cout << "Recv ErrorCode : " << errCode << endl;
-			return 0;
+			int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+			if (recvLen == SOCKET_ERROR)
+			{
+				if (::WSAGetLastError() == WSAEWOULDBLOCK)
+					continue;
+				
+				break;
+			}
+			else if (recvLen == 0)
+			{
+				break;
+			}
+
+			cout << "Recv Data! Data = " << recvBuffer << endl;
+			break;
 		}
-
-		cout << "Recv Data! Data = " << recvBuffer << endl;
-		cout << "Recv Data! Len = " << recvLen << endl;
-
+		
 		this_thread::sleep_for(1s);
 	}
 

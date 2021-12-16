@@ -45,8 +45,7 @@ int main()
 	u_long on = 1;
 	if (::ioctlsocket(listenSocket, FIONBIO, &on) == INVALID_SOCKET)
 	{
-		int32 errCode = ::WSAGetLastError();
-		cout << "Socket ErrorCode : " << errCode << endl;
+		cout << "ioc ErrorCode : " << endl;
 		return 0;
 	}
 		
@@ -63,19 +62,13 @@ int main()
 
 	serverAddr.sin_port = ::htons(7777); // 80 : HTTP
 
-	/*소켓을 바인딩합니다. 지금 넘겨지는 소켓과 이 프로세스와 묶는다(bind)라고 생각하시면 됩니다. 
-	그래서 해당 프로세스는 소켓을 통해 다른 컴퓨터로부터 연결을 받아들일 수 있습니다.*/
-	if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+		if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
 	{
 		int32 errCode = ::WSAGetLastError();
 		cout << "Bind ErrorCode : " << errCode << endl;
 		return 0;
 	}
 
-	// 처리시작
-	/* 소켓을 통해 들어오는 연결을 듣습니다.
-	backlog_queue_size만큼 연결 요청을 큐에 넣습니다. 
-	성공시 0, 오류시 -1을 반환합니다.*/
 	if (::listen(listenSocket, 10) == SOCKET_ERROR)
 	{
 		int32 errCode = ::WSAGetLastError();
@@ -83,7 +76,10 @@ int main()
 		return 0;
 	}
 
-	// -----------------------------
+	cout << "accept" << endl;
+
+	SOCKADDR_IN clientAddr;
+	int32 addrLen = sizeof(clientAddr);
 
 	while (true)
 	{
@@ -91,71 +87,79 @@ int main()
 		::memset(&clientAddr, 0, sizeof(clientAddr));
 		int32 addrLen = sizeof(clientAddr);
 
-		/*
-		어떤 컴퓨터에서 이 컴퓨터로 연결할때 연결을 받아들입니다.
-		연결된 원격 컴퓨터의 정보는 remote_host에 저장됩니다. 오류시에 -1을 반환합니다.
-		*/
+
 		SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
 		if (clientSocket == INVALID_SOCKET)
 		{
+
 			int32 errCode = ::WSAGetLastError();
+
+			//논블로킹이므로 블락이 문제되진 않는다.
+			if (errCode == WSAEWOULDBLOCK)
+				 continue;
+
 			cout << "Accept ErrorCode : " << errCode << endl;
-			return 0;
+
+			break;
 		}
+
+
+		cout << "client Connected" << endl;
 
 		// client 연결
-		char ipAddress[16];
-		// 알아보기쉽게 문자열로 변환
-		::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
-		cout << "Client Connected! IP = " << ipAddress << endl;
+		//char ipAddress[16];
+		//// 알아보기쉽게 문자열로 변환
+		//::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
+		//cout << "Client Connected! IP = " << ipAddress << endl;
 
 
-		while (true)
-		{
-			SOCKADDR_IN clientAddr; // IPv4
-			::memset(&clientAddr, 0, sizeof(clientAddr));
-			int32 addrLen = sizeof(clientAddr);
+			//// 손님 입장!
+			//char ipAddress[16];
+			//::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
+			//cout << "Client Connected! IP = " << ipAddress << endl;
 
-			SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
-			if (clientSocket == INVALID_SOCKET)
-			{
-				int32 errCode = ::WSAGetLastError();
-				cout << "Accept ErrorCode : " << errCode << endl;
-				return 0;
-			}
-
-			// 손님 입장!
-			char ipAddress[16];
-			::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
-			cout << "Client Connected! IP = " << ipAddress << endl;
-
-			// TODO
+			// Recv
 			while (true)
 			{
-				char recvBuffer[1000];
-
-				this_thread::sleep_for(1s);
-
-				int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-				if (recvLen <= 0)
+				char RecvBuffer[1000]=" ";
+				int32 recvLen = ::recv(clientSocket, RecvBuffer, sizeof(RecvBuffer), 0);
+				if (recvLen == SOCKET_ERROR)
 				{
+
 					int32 errCode = ::WSAGetLastError();
+					if (errCode == WSAEWOULDBLOCK)
+						continue;
+
+					// Error
 					cout << "Recv ErrorCode : " << errCode << endl;
-					return 0;
+
+					break;
 				}
-
-				cout << "Recv Data! Data = " << recvBuffer << endl;
-				cout << "Recv Data! Len = " << recvLen << endl;
-
-				/*int32 resultCode = ::send(clientSocket, recvBuffer, recvLen, 0);
-				if (resultCode == SOCKET_ERROR)
+				else if (recvLen == 0)
 				{
-					int32 errCode = ::WSAGetLastError();
-					cout << "Send ErrorCode : " << errCode << endl;
-					return 0;
-				}*/
+					// 연결 끊김
+					break;
+				}
+				
+				cout << "Recv Data! Data = " << RecvBuffer << endl;
+
+				char SendBuffer[1000]="서버에서 보낸다";
+
+				// Send
+				while (true)
+				{
+					if (::send(clientSocket, SendBuffer, recvLen, 0) == SOCKET_ERROR)
+					{
+						
+						if (::WSAGetLastError() == WSAEWOULDBLOCK)
+							continue;
+						// Error
+						break;
+					}
+
+					break;
+				}
 			}
-		}
 	}
 
 	// -----------------------------
