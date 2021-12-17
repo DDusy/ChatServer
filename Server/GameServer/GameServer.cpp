@@ -14,15 +14,16 @@
 #include "ConCurrentQueue.h"
 #include "ConCurrentStack.h"
 
-/*
+const int32 BUFSIZE = 1000;
 
-6. send(int fd, void* buffer, size_t n, int flags)
+struct Session
+{
+	SOCKET socket = INVALID_SOCKET;
+	char recvBuffer[BUFSIZE] = {};
+	int32 recvBytes = 0;
+	int32 sendBytes = 0;
+};
 
-7. recv(int fd, void* buffer, size_t n, int flags)
-send함수와 사용법이 거의 비슷.
-n바이트를 buffer로 읽습니다. 
-성공시 받은 바이트수를 반환하며 실패시 -1을 반환합니다.
- */
 int main()
 {
 	//	Bind -> lisen ->accept(socket 반환)->
@@ -76,90 +77,85 @@ int main()
 		return 0;
 	}
 
-	cout << "accept" << endl;
+	cout << "Accept" << endl;
 
-	SOCKADDR_IN clientAddr;
-	int32 addrLen = sizeof(clientAddr);
+	
+	vector<Session> sessions;
+	sessions.reserve(100);
+
+	fd_set reads;
+	fd_set writes;
 
 	while (true)
 	{
-		SOCKADDR_IN clientAddr; // IPv4
-		::memset(&clientAddr, 0, sizeof(clientAddr));
-		int32 addrLen = sizeof(clientAddr);
+		FD_ZERO(&reads);
+		FD_ZERO(&writes);
 
+		FD_SET(listenSocket, &reads);
 
-		SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
-		if (clientSocket == INVALID_SOCKET)
+		for (Session& session : sessions)
 		{
-
-			int32 errCode = ::WSAGetLastError();
-
-			//논블로킹이므로 블락이 문제되진 않는다.
-			if (errCode == WSAEWOULDBLOCK)
-				 continue;
-
-			cout << "Accept ErrorCode : " << errCode << endl;
-
-			break;
+			if (session.recvBytes <= session.sendBytes)
+				FD_SET(session.socket, &reads);
+			else
+				FD_SET(session.socket, &writes);
 		}
 
+		int32 retVal = ::select(0, &reads, &writes, nullptr, nullptr);
+		if (retVal == SOCKET_ERROR)
+			break;
 
-		cout << "client Connected" << endl;
-
-		// client 연결
-		//char ipAddress[16];
-		//// 알아보기쉽게 문자열로 변환
-		//::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
-		//cout << "Client Connected! IP = " << ipAddress << endl;
-
-
-			//// 손님 입장!
-			//char ipAddress[16];
-			//::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
-			//cout << "Client Connected! IP = " << ipAddress << endl;
-
-			// Recv
-			while (true)
+		// Listener 소켓 체크 -> 삭제되지않으면 준비 완료
+		if (FD_ISSET(listenSocket, &reads))
+		{
+			SOCKADDR_IN clientAddr;
+			int32 addrLen = sizeof(clientAddr);
+			SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
+			if (clientSocket != INVALID_SOCKET)
 			{
-				char RecvBuffer[1000]=" ";
-				int32 recvLen = ::recv(clientSocket, RecvBuffer, sizeof(RecvBuffer), 0);
-				if (recvLen == SOCKET_ERROR)
+				cout << "Client Connected" << endl;
+				sessions.push_back(Session{ clientSocket });
+			}
+		}
+
+		// 나머지 소켓 체크
+		for (Session& s : sessions)
+		{
+			// Read
+			if (FD_ISSET(s.socket, &reads))
+			{
+				int32 recvLen = ::recv(s.socket, s.recvBuffer, BUFSIZE, 0);
+				if (recvLen <= 0) // 연결이 끊김
 				{
+					//sessions 제거
 
-					int32 errCode = ::WSAGetLastError();
-					if (errCode == WSAEWOULDBLOCK)
-						continue;
-
-					// Error
-					cout << "Recv ErrorCode : " << errCode << endl;
 
 					break;
 				}
-				else if (recvLen == 0)
+
+				s.recvBytes = recvLen;
+			}
+
+			// Write
+			if (FD_ISSET(s.socket, &writes))
+			{
+				// 블로킹 모드 -> 모든 데이터 다 보냄
+				// 논블로킹 모드 -> 일부만 보낼 수가 있음 (상대방 수신 버퍼 상황에 따라)
+				int32 sendLen = ::send(s.socket, &s.recvBuffer[s.sendBytes], s.recvBytes - s.sendBytes, 0);
+				if (sendLen == SOCKET_ERROR)
 				{
-					// 연결 끊김
-					break;
+					// TODO : sessions 제거
+					continue;
 				}
-				
-				cout << "Recv Data! Data = " << RecvBuffer << endl;
 
-				char SendBuffer[1000]="서버에서 보낸다";
-
-				// Send
-				while (true)
+				s.sendBytes += sendLen;
+				if (s.recvBytes == s.sendBytes)
 				{
-					if (::send(clientSocket, SendBuffer, recvLen, 0) == SOCKET_ERROR)
-					{
-						
-						if (::WSAGetLastError() == WSAEWOULDBLOCK)
-							continue;
-						// Error
-						break;
-					}
-
-					break;
+					s.recvBytes = 0;
+					s.sendBytes = 0;
 				}
 			}
+		}
 	}
 
 	// -----------------------------
