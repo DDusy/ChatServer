@@ -93,6 +93,7 @@ int main()
 
 		FD_SET(listenSocket, &reads);
 
+		//***
 		for (Session& session : sessions)
 		{
 			if (session.recvBytes <= session.sendBytes)
