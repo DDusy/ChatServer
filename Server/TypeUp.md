@@ -151,7 +151,7 @@ Socket Set 과정
 1) 읽기[ ] 쓰기[ ] 예외(OOB)[ ] 관찰 대상 등록
     OutOfBand는 send() 마지막 인자 MSG_OOB로 보내는 특별한 데이터
     받는 쪽에서도 recv OOB 세팅을 해야 읽을 수 있음 	*OOB(Out of Band) 우선순위 통신시 사용
-  
+
 2. select(readSet, writeSet, exceptSet); -> 관찰 시작
 
 3. 적어도 하나의 소켓이 준비되면 리턴 -> 준비안된 소켓은 제거
@@ -176,6 +176,42 @@ Socket Set 과정
 WSAEventSelect - 비동기 방식
 
 ​	소켓과 관련된 네트워크 이벤트를 이벤트 객체를 통해 감지 
+
+​	소켓개수 만큼 이벤트 객체 연동
+
+**이벤트 객체 관련 함수들**
+
+- 생성 : WSACreateEvent (기본 select에서 수동 리셋 Manual-Reset + Non-Signaled 상태 시작)
+-  삭제 : WSACloseEvent
+- 신호 상태 감지 : WSAWaitForMultipleEvents
+- 구체적인 네트워크 이벤트 알아내기 : WSAEnumNetworkEvents (Read,Write,Connect 등을 알고싶을때)
+
+소켓 연동 :WSAEventSelect(socket, event, networkEvents) 
+
+> 관심있는 네트워크 이벤트 종류
+
+- FD_ACCEPT : 접속한 클라가 있음 accept
+- FD_READ : 데이터 수신 가능 recv, recvfrom
+- FD_WRITE : 데이터 송신 가능 send, sendto
+- FD_CLOSE : 상대가 접속 종료
+- FD_CONNECT : 통신을 위한 연결 절차 완료
+- FD_OOB
+
+**주의 사항**
+ WSAEventSelect 함수를 호출하면, 해당 소켓은 자동으로 논블로킹 모드 전환
+accept() 함수가 리턴하는 소켓은 listenSocket과 동일한 속성을 갖는다
+
+- 따라서 clientSocket은 FD_READ, FD_WRITE 등을 다시 등록 필요
+- 드물게 WSAEWOULDBLOCK 오류가 뜰 수 있으니 예외 처리 필요
+-  이벤트 발생 시, 적절한 소켓 함수 호출해야 함아니면 다음 번에는 동일 네트워크 이벤트가 발생 X
+  ex) FD_READ 이벤트 떴으면 recv() 호출해야 하고, 안하면 FD_READ 두 번 다시 X
+
+1) count, event
+2) waitAll :  하나만 완료 되어도 체크
+3) timeout : 타임아웃
+4) 지금은 false
+    return : 완료된 첫번째 인덱스
+    WSAWaitForMultipleEvents
 
 
 
