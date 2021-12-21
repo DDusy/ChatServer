@@ -76,7 +76,7 @@ int main()
 	while (true)
 	{
 		// TODO
-		char sendBuffer[100] = "non blocking Test!";
+		char sendBuffer[100] = "Client SendTest";
 
 			int32 resultCode = ::send(clientSocket, sendBuffer, sizeof(sendBuffer), 0);
 
@@ -91,25 +91,32 @@ int main()
 				cout << "Send ErrorCode : " << errCode << endl;
 				break;
 			}
+
+			cout << "Client SendData = " << sendBuffer<< " Length : " << sizeof(sendBuffer) << endl;
 		
 		char recvBuffer[1000]=" ";
 
 		while (true)
 		{
 			int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+			
 			if (recvLen == SOCKET_ERROR)
 			{
+				
 				if (::WSAGetLastError() == WSAEWOULDBLOCK)
 					continue;
-				
+
+				// Error
 				break;
 			}
 			else if (recvLen == 0)
 			{
+				// 연결 끊김
 				break;
 			}
 
-			cout << "Recv Data! Data = " << recvBuffer << endl;
+			cout << "Client RecvData = " << recvBuffer<< " Length : " << sizeof(recvBuffer) << endl;
+
 			break;
 		}
 		

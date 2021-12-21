@@ -20,6 +20,8 @@ struct Session
 {
 	SOCKET socket = INVALID_SOCKET;
 	char recvBuffer[BUFSIZE] = {};
+	char sendBuffer[BUFSIZE] = "WSASelectModel Test!";
+
 	int32 recvBytes = 0;
 	int32 sendBytes = 0;
 };
@@ -57,10 +59,7 @@ int main()
 	::memset(&serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY); // 자동으로 선택
-	/*
-	* 네트워크가 어려개일때 유동적으로 동작
-	*/
-
+	
 	serverAddr.sin_port = ::htons(7777); // 80 : HTTP
 
 		if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
@@ -80,72 +79,94 @@ int main()
 	cout << "Accept" << endl;
 
 	
+	
+	vector<WSAEVENT> wsaEvents; // WsaEvent로 교체
+
 	vector<Session> sessions;
 	sessions.reserve(100);
 
-	fd_set reads;
-	fd_set writes;
+	WSAEVENT listenEvent = WSACreateEvent();
+	wsaEvents.push_back(listenEvent);
+	sessions.push_back(Session{ listenSocket }); // 클라이벤트랑 소켓의 개수가 맞추기위해
 
+	// lisenEvent와 lisenSocket의 개수는 같음
+	if (::WSAEventSelect(listenSocket, listenEvent, FD_ACCEPT | FD_CLOSE) == SOCKET_ERROR)
+	{
+		cout << "Socket Error" << endl;
+		return 0;
+	}
+
+	
 	while (true)
 	{
-		FD_ZERO(&reads);
-		FD_ZERO(&writes);
+		int32 idx = ::WSAWaitForMultipleEvents(DWORD(wsaEvents.size()),&wsaEvents[0], FALSE, WSA_INFINITE, FALSE);
 
-		FD_SET(listenSocket, &reads);
+		if (idx == WSA_WAIT_FAILED)
+			continue;
 
-		//***
-		for (Session& session : sessions)
+		WSANETWORKEVENTS networkEvents;
+		//Reset 포함
+		if (::WSAEnumNetworkEvents(sessions[idx].socket, wsaEvents[idx], &networkEvents) == SOCKET_ERROR)
+			continue;
+
+		if (networkEvents.lNetworkEvents & FD_ACCEPT)
 		{
-			if (session.recvBytes <= session.sendBytes)
-				FD_SET(session.socket, &reads);
-			else
-				FD_SET(session.socket, &writes);
-		}
+			if (networkEvents.iErrorCode[FD_ACCEPT_BIT] != 0)
+				continue;
 
-		int32 retVal = ::select(0, &reads, &writes, nullptr, nullptr);
-		if (retVal == SOCKET_ERROR)
-			break;
-
-		// Listener 소켓 체크 -> 삭제되지않으면 준비 완료
-		if (FD_ISSET(listenSocket, &reads))
-		{
 			SOCKADDR_IN clientAddr;
-			int32 addrLen = sizeof(clientAddr);
-			SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
+			int32 AddrLen = sizeof(clientAddr);
+
+			SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &AddrLen);
 			if (clientSocket != INVALID_SOCKET)
 			{
 				cout << "Client Connected" << endl;
+
+				WSAEVENT clientEvent = ::WSACreateEvent();
+				wsaEvents.push_back(clientEvent);
 				sessions.push_back(Session{ clientSocket });
+
+				if (::WSAEventSelect(clientSocket, clientEvent, FD_READ | FD_WRITE | FD_CLOSE) == SOCKET_ERROR)
+					return 0;
 			}
+
 		}
 
-		// 나머지 소켓 체크
-		for (Session& s : sessions)
+		// Client Session 소켓 체크
+		if (networkEvents.lNetworkEvents & FD_READ || networkEvents.lNetworkEvents & FD_WRITE)
 		{
+			// Error-Check
+			if ((networkEvents.lNetworkEvents & FD_READ) && (networkEvents.iErrorCode[FD_READ_BIT] != 0))
+				continue;
+			// Error-Check
+			if ((networkEvents.lNetworkEvents & FD_WRITE) && (networkEvents.iErrorCode[FD_WRITE_BIT] != 0))
+				continue;
+
+			Session& s = sessions[idx];
+
 			// Read
-			if (FD_ISSET(s.socket, &reads))
+			if (s.recvBytes == 0)
 			{
 				int32 recvLen = ::recv(s.socket, s.recvBuffer, BUFSIZE, 0);
-				if (recvLen <= 0) // 연결이 끊김
+				if (recvLen == SOCKET_ERROR && ::WSAGetLastError() != WSAEWOULDBLOCK)
 				{
-					//sessions 제거
-
-
-					break;
+					cout << "Session error" << endl;
+					continue;
 				}
 
 				s.recvBytes = recvLen;
+				cout << "Server RecvData = " <<s.recvBuffer << " Length : " << recvLen << endl;
+				
 			}
 
 			// Write
-			if (FD_ISSET(s.socket, &writes))
+			if (s.recvBytes > s.sendBytes)
 			{
-				// 블로킹 모드 -> 모든 데이터 다 보냄
-				// 논블로킹 모드 -> 일부만 보낼 수가 있음 (상대방 수신 버퍼 상황에 따라)
-				int32 sendLen = ::send(s.socket, &s.recvBuffer[s.sendBytes], s.recvBytes - s.sendBytes, 0);
-				if (sendLen == SOCKET_ERROR)
+				int32 sendLen = ::send(s.socket,s.sendBuffer, 100, 0);
+				
+				if (sendLen == SOCKET_ERROR && ::WSAGetLastError() != WSAEWOULDBLOCK)
 				{
-					// TODO : sessions 제거
+					cout << "Session error" << endl;
 					continue;
 				}
 
@@ -155,11 +176,17 @@ int main()
 					s.recvBytes = 0;
 					s.sendBytes = 0;
 				}
+
+				cout << "Server SendData = " <<s.sendBuffer<<" Length : " << sendLen << endl;
 			}
 		}
-	}
 
-	// -----------------------------
+		// FD_CLOSE 처리
+		if (networkEvents.lNetworkEvents & FD_CLOSE)
+		{
+			cout << "Socket error" << endl;
+		}
+	}
 
 
 	// 윈속 종료

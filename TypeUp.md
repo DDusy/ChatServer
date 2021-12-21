@@ -186,9 +186,9 @@ WSAEventSelect - 비동기 방식
 - 신호 상태 감지 : WSAWaitForMultipleEvents
 - 구체적인 네트워크 이벤트 알아내기 : WSAEnumNetworkEvents (Read,Write,Connect 등을 알고싶을때)
 
-소켓 연동 :WSAEventSelect(socket, event, networkEvents) 
+소켓 연동 : **WSAEventSelect(socket, event, networkEvents) **
 
-> 관심있는 네트워크 이벤트 종류
+> 관심있는 네트워크 이벤트 종류 / 어떤 이벤트상태를 감지할지
 
 - FD_ACCEPT : 접속한 클라가 있음 accept
 - FD_READ : 데이터 수신 가능 recv, recvfrom
@@ -198,7 +198,7 @@ WSAEventSelect - 비동기 방식
 - FD_OOB
 
 **주의 사항**
- WSAEventSelect 함수를 호출하면, 해당 소켓은 자동으로 논블로킹 모드 전환
+ **WSAEventSelect** 함수를 호출하면, 해당 소켓은 자동으로 논블로킹 모드 전환
 accept() 함수가 리턴하는 소켓은 listenSocket과 동일한 속성을 갖는다
 
 - 따라서 clientSocket은 FD_READ, FD_WRITE 등을 다시 등록 필요
@@ -206,12 +206,21 @@ accept() 함수가 리턴하는 소켓은 listenSocket과 동일한 속성을 �
 -  이벤트 발생 시, 적절한 소켓 함수 호출해야 함아니면 다음 번에는 동일 네트워크 이벤트가 발생 X
   ex) FD_READ 이벤트 떴으면 recv() 호출해야 하고, 안하면 FD_READ 두 번 다시 X
 
-1) count, event
-2) waitAll :  하나만 완료 되어도 체크
-3) timeout : 타임아웃
-4) 지금은 false
-    return : 완료된 첫번째 인덱스
-    WSAWaitForMultipleEvents
+**WSAWaitForMultipleEvents 인자**
 
+1. count, event
 
+2. waitAll :  모두 기다릴지 아니면 하나만 완료 되어도 빠져나올지 결정
+
+3. timeout : 타임아웃
+
+4. 지금은 false
+
+   **return 은 완료된 첫번째 인덱스**
+
+**WSAEnumNetworkEvents 인자** 
+1.socket	
+2.eventobject 	:	socket 과 연동된 이벤트 객체 핸들을 넘겨주면,
+								 이벤트 객체를 non-signaled
+3.networkEvent : 네트워크 이벤트 / 오류 정보가 저장
 
