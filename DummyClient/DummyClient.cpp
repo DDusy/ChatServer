@@ -103,7 +103,7 @@ int main()
 			}
 		}
 
-		cout << "Client RecvData = " << recvBuffer<< " Length : " << sizeof(recvBuffer) << endl;
+		//cout << "Client RecvData = " << recvBuffer<< " Length : " << sizeof(recvBuffer) << endl;
 
 			break;
 		

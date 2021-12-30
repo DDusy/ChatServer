@@ -27,6 +27,12 @@ struct Session
 	WSAOVERLAPPED overlapped = {};
 };
 
+void CALLBACK RecvCallback(DWORD error, DWORD recvLen, LPWSAOVERLAPPED overlapped, DWORD flags)
+{
+	cout << "Data Recv Len Callback = " << recvLen << endl;
+
+}
+
 int main()
 {
 	//	Bind -> lisen ->accept(socket 반환)->
@@ -100,44 +106,43 @@ int main()
 		}
 
 		Session session = Session{ clientSocket };
-		WSAEVENT wsaEvent = ::WSACreateEvent();
-		session.overlapped.hEvent = wsaEvent;
+		//WSAEVENT wsaEvent = ::WSACreateEvent();
 
 		cout << "Client Connected !" << endl;
 
 		while (true)
 		{
-			//Recv 할 버퍼를  WSABUF에 담아 넘겨줌
 			WSABUF wsaBuf;
-			wsaBuf.buf = session.recvBuffer; /*RecvBuffer 자체는 그대로있어야한다. **/
+			wsaBuf.buf = session.recvBuffer;
 			wsaBuf.len = BUFSIZE;
 
 			DWORD recvLen = 0;
 			DWORD flags = 0;
-			
-			if (::WSARecv(clientSocket, &wsaBuf, 1, &recvLen, &flags, &session.overlapped, nullptr) == SOCKET_ERROR)
+			if (::WSARecv(clientSocket, &wsaBuf, 1, &recvLen, &flags, &session.overlapped, RecvCallback) == SOCKET_ERROR)
 			{
 				if (::WSAGetLastError() == WSA_IO_PENDING)
 				{
 					// Pending
-					::WSAWaitForMultipleEvents(1, &wsaEvent, TRUE, WSA_INFINITE, FALSE);
-					::WSAGetOverlappedResult(session.socket, &session.overlapped, &recvLen, FALSE, &flags);
+					// Alertable Wait					
+					::SleepEx(INFINITE, TRUE);
+					//클라 개수만큼 할당하지 않아도 됨/ 콜백함수를이용에 한번에 묶어 처리가능
+					//::WSAWaitForMultipleEvents(1, &wsaEvent, TRUE, WSA_INFINITE, TRUE);					
 				}
 				else
 				{
-					cout << "WSARecv Failed : &d" << endl;
+					// TODO : 문제 있는 상황
 					break;
 				}
 			}
-
-			cout << "Data Recv  = " <<session.recvBuffer<< endl;
+			else
+			{
+				cout << "Data Recv Len = " << recvLen << endl;
+			}
 		}
 
-		::WSACloseEvent(wsaEvent);
 		::closesocket(session.socket);
-		
+		//::WSACloseEvent(wsaEvent);
 	}
-
 
 	// 윈속 종료
 	::WSACleanup();
